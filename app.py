@@ -28,7 +28,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilo CSS Personalizado para melhorar a UX visual
+# Estilo CSS Personalizado
 st.markdown("""
 <style>
     .stButton>button {
@@ -58,7 +58,6 @@ class ContextAccumulator:
     @staticmethod
     def add_image(uploaded_file):
         if uploaded_file:
-            # Verifica duplicidade simples pelo nome
             if any(item['label'] == uploaded_file.name for item in st.session_state.dossie_buffer):
                 st.warning(f"Imagem '{uploaded_file.name}' já adicionada.")
                 return
@@ -86,55 +85,102 @@ class ContextAccumulator:
             st.toast(f"Removido: {removed['label']}", icon="🗑️")
 
 # ==============================================================================
-# CAMADA 2: ENGENHARIA DE PROMPT
+# CAMADA 2: ENGENHARIA DE PROMPT (PROFISSIONALIZADA)
 # ==============================================================================
 class PromptEngine:
     @staticmethod
     def get_system_instruction(artifact_type):
-        return f"""
-        ATUE COMO: Product Owner Técnico e Engenheiro de Software Sênior.
-        OBJETIVO: Transformar as informações visuais e textuais fornecidas em um artefato de trabalho claro, conciso e tecnicamente embasado.
-        TIPO DE ARTEFATO: {artifact_type}
+        
+        # PROMPT PARA PBI (Regra de Negócio + Funcionalidade)
+        if artifact_type == "PBI (Product Backlog Item)":
+            return """
+            ATUE COMO: Product Owner Sênior e Especialista em Negócios.
+            OBJETIVO: Definir o "O QUE" e o "PORQUE" de uma funcionalidade, focando em valor de negócio e regras.
+            
+            SAÍDA ESPERADA (Markdown):
+            
+            # PBI: [Título Orientado a Valor]
+            **ID:** [Gerar ID] | **Prioridade:** [Alta/Média/Baixa]
+            
+            ## 1. User Story
+            **Como** [persona identificada], **Quero** [ação funcional], **Para que** [benefício claro de negócio].
+            
+            ## 2. Critérios de Aceite (Gherkin Obrigatório)
+            Escreva cenários de teste cobrindo: Caminho Feliz, Erros de Validação e Casos de Borda.
+            ```gherkin
+            Funcionalidade: [Nome]
+            
+            Cenário: [Nome do cenário]
+              Dado [contexto inicial]
+              Quando [ação]
+              Então [resultado esperado]
+            ```
+            
+            ## 3. Regras de Negócio
+            Liste regras explícitas (baseadas no texto) e implícitas (inferidas da UI, ex: campos obrigatórios, máscaras).
+            
+            ## 4. Definição de Pronto (DoD)
+            Critérios específicos para considerar este item concluído (ex: Documentação atualizada, Testes E2E).
+            """
 
-        VOCÊ DEVE SEGUIR RIGOROSAMENTE ESTE TEMPLATE DE ESTRUTURA (Preencha com os dados analisados):
+        # PROMPT PARA TASKS TÉCNICAS (Implementação)
+        elif artifact_type == "Task Técnica (Sub-tarefa de PBI)":
+            return """
+            ATUE COMO: Tech Lead / Arquiteto de Software Sênior.
+            OBJETIVO: Definir o "COMO" implementar a funcionalidade, quebrando em passos técnicos para desenvolvedores.
+            
+            SAÍDA ESPERADA (Markdown):
+            
+            # TASK TÉCNICA: [Título Técnico - ex: Implementar Endpoint POST /api/v1/login]
+            **Contexto:** [Breve referência à funcionalidade de negócio]
+            
+            ## 1. Plano de Implementação
+            Detalhamento passo-a-passo do que deve ser codificado.
+            - [ ] [Passo 1 - ex: Criar migração de banco de dados]
+            - [ ] [Passo 2 - ex: Implementar Controller e Service]
+            - [ ] [Passo 3 - ex: Criar testes unitários]
+            
+            ## 2. Contrato de Interface (API/Dados)
+            Se houver API, defina o Swagger/OpenAPI spec sugerido (JSON).
+            Se for Frontend, defina a estrutura de props dos componentes.
+            
+            ## 3. Dependências e Impactos
+            - Bibliotecas necessárias.
+            - Alterações em outros serviços.
+            - Riscos de segurança (ex: Sanitização de inputs).
+            
+            ## 4. Critérios Técnicos de Aceite
+            - Cobertura de testes > 80%.
+            - Validação de Performance (ex: resposta < 200ms).
+            """
 
-        # {artifact_type.upper()}: [Título conciso da funcionalidade]
-        **ID:** [Gerar ID ex: FEAT-123] | **Prioridade:** [Alta/Média/Baixa] | **Sprint:** [Sugerir]
-
-        ## 1. User Story (Visão do Produto)
-        **Como** [persona], **Eu quero** [ação], **Para que** [valor de negócio].
-
-        ## 2. Descrição Detalhada (Contexto e Fluxo)
-        [Descreva o fluxo passo a passo, cenário inicial, ações do usuário e resultados esperados. Mencione regras de negócio explícitas e implícitas visualizadas.]
-
-        ## 3. Evidências Visuais (Análise)
-        [Liste as telas analisadas e descreva brevemente os elementos chave identificados em cada uma, ex: "Tela de Login com campos email/senha e botão recuperar".]
-
-        ## 4. Critérios de Aceitação (Gherkin)
-        ```gherkin
-        Cenário 1: [Caminho Feliz]
-        Dado [estado inicial]
-        Quando [ação]
-        Então [resultado esperado]
-
-        Cenário 2: [Caminho de Exceção/Erro]
-        Dado [estado]
-        Quando [ação inválida]
-        Então [mensagem de erro ou comportamento]
-        ```
-
-        ## 5. Considerações Técnicas (Engenharia)
-        * **APIs/Endpoints:** [Sugerir método HTTP, URL e payload JSON estimado]
-        * **Banco de Dados:** [Sugerir tabelas ou campos afetados]
-        * **Segurança:** [Mencionar autenticação, validação de input, etc.]
-        * **Padrões:** [Sugestão de pattern se aplicável]
-
-        ## 6. Tratamento de Erros
-        [Liste mensagens de erro amigáveis para o usuário e comportamento do sistema em falhas]
-
-        ## 7. Definição de Pronto (DoD) Sugerida
-        [Checklist de qualidade técnica e funcional para considerar a tarefa concluída]
-        """
+        # PROMPT PARA BUGS (Correção)
+        elif artifact_type == "Bug / Defeito":
+            return """
+            ATUE COMO: QA Engineer e Site Reliability Engineer (SRE).
+            OBJETIVO: Documentar um defeito com precisão para facilitar a reprodução e correção.
+            
+            SAÍDA ESPERADA (Markdown):
+            
+            # BUG: [Descrição concisa do erro]
+            **Severidade:** [Crítica/Alta/Média/Baixa] | **Ambiente:** [Inferir se possível]
+            
+            ## 1. Descrição do Problema
+            O que deveria acontecer vs. O que está acontecendo realmente. Use as evidências visuais para descrever o erro.
+            
+            ## 2. Passos para Reprodução (Steps to Reproduce)
+            Lista numerada clara e sequencial para replicar o erro.
+            1. Acessar tela X...
+            2. Clicar em Y...
+            
+            ## 3. Análise de Causa Raiz (Hipótese Técnica)
+            Baseado nas mensagens de erro (logs/telas), sugira onde está o problema (ex: Falha de conexão, Erro 500 no Backend, NullPointer no Frontend).
+            
+            ## 4. Sugestão de Correção
+            Se possível, sugira a correção técnica ou workaround.
+            """
+            
+        return "Instrução Padrão Genérica"
 
     @staticmethod
     def assemble_payload_vertex(artifact_type):
@@ -181,7 +227,7 @@ class VertexSynthesis:
             payload = PromptEngine.assemble_payload_vertex(artifact_type)
             response = model.generate_content(
                 payload, 
-                generation_config={"temperature": 0.1, "max_output_tokens": 8192}
+                generation_config={"temperature": 0.2, "max_output_tokens": 8192}
             )
             return response.text
         except Exception as e:
@@ -202,12 +248,13 @@ class CorporateSynthesis:
             clean_model = model_name
             if "gemini-1.5-flash" in model_name: clean_model = "gemini-1.5-flash"
             elif "gemini-1.5-pro" in model_name: clean_model = "gemini-1.5-pro"
+            elif "gemini-2.0" in model_name: clean_model = "gemini-1.5-pro" # Fallback seguro se não existir no Studio
             
             model = genai.GenerativeModel(clean_model)
             payload = PromptEngine.assemble_payload_studio(artifact_type)
             response = model.generate_content(
                 payload,
-                generation_config={"temperature": 0.1, "max_output_tokens": 8192}
+                generation_config={"temperature": 0.2, "max_output_tokens": 8192}
             )
             return response.text
         except Exception as e:
@@ -242,28 +289,21 @@ def main():
         st.markdown("---")
         model_choice = st.selectbox(
             "Modelo de IA", 
-            [
-                "gemini-2.5-flash-preview",
-                "gemini-2.5-flash",
-                "gemini-2.5-pro",
-            ],
+            ["gemini-1.5-flash-001", "gemini-1.5-pro-001"],
             index=0,
             help="Flash é mais rápido. Pro é mais detalhado."
         )
-        st.caption("v4.5 - UX Enhanced")
+        st.caption("v5.0 - Professional Prompts")
 
     # --- Área Principal ---
     st.title("🚀 Clarity Engine")
     st.markdown("##### Assistente de Refinamento de Requisitos")
 
-    # Layout Assimétrico: 40% Entrada (Esq) | 60% Saída (Dir)
     col1, col2 = st.columns([0.4, 0.6], gap="large")
 
-    # --- COLUNA 1: ENTRADA E CONTEXTO ---
     with col1:
         st.success("📂 **1. Adicionar Evidências**")
         
-        # Abas compactas para entrada
         tab_img, tab_txt = st.tabs(["🖼️ Imagem", "📝 Texto/Regra"])
         
         with tab_img:
@@ -281,20 +321,17 @@ def main():
 
         st.markdown("---")
         
-        # Visualização do Buffer (Dossiê) Melhorada
         st.markdown(f"**🗂️ Dossiê de Contexto ({len(st.session_state.dossie_buffer)} itens)**")
         
         if not st.session_state.dossie_buffer:
             st.info("O dossiê está vazio. Adicione evidências acima.")
         else:
-            # Lista compacta de itens
             for i, item in enumerate(st.session_state.dossie_buffer):
                 icon = "🖼️" if item['type'] == 'image' else "📝"
                 col_item_label, col_item_btn = st.columns([0.85, 0.15])
                 with col_item_label:
                     st.text(f"{icon} {item['label']}")
                 with col_item_btn:
-                    # Botão pequeno de remover (simulação visual, pois st.button recarrega a pagina)
                     if st.button("❌", key=f"del_{i}", help="Remover item"):
                         ContextAccumulator.remove_item(i)
                         st.rerun()
@@ -303,31 +340,28 @@ def main():
                 ContextAccumulator.clear_buffer()
                 st.rerun()
 
-    # --- COLUNA 2: AÇÃO E RESULTADO ---
     with col2:
         st.warning("⚡ **2. Gerar Especificação**")
         
-        # Configuração da Geração
+        # Configuração da Geração com NOVAS CATEGIORIAS
         c_art, c_btn = st.columns([3, 1])
         with c_art:
             art_type = st.radio(
                 "Tipo de Artefato", 
-                ["PBI", "Task Técnica", "Bug"], 
+                ["PBI (Product Backlog Item)", "Task Técnica (Sub-tarefa de PBI)", "Bug / Defeito"], 
                 horizontal=True,
                 label_visibility="collapsed"
             )
         with c_btn:
-            # Botão de ação principal destacado
             btn_process = st.button("✨ GERAR", type="primary", use_container_width=True)
 
         st.markdown("---")
 
-        # Área de Resultado
         if btn_process:
             if not st.session_state.dossie_buffer:
                 st.error("⚠️ Adicione evidências ao dossiê na coluna da esquerda primeiro.")
             else:
-                with st.spinner("🤖 Analisando contexto e gerando documento..."):
+                with st.spinner(f"🤖 Analisando contexto para gerar {art_type}..."):
                     if auth_config['mode'] == 'vertex':
                         if not auth_config['project_id']:
                             st.error("Configure o Project ID na barra lateral.")
@@ -347,7 +381,6 @@ def main():
                         st.balloons()
                         st.success("Documento gerado com sucesso!")
                         
-                        # Abas para visualizar e baixar
                         tab_view, tab_raw = st.tabs(["📄 Visualização", "code Markdown"])
                         with tab_view:
                             st.markdown(res)
@@ -364,7 +397,6 @@ def main():
                     elif res:
                         st.error(res)
 
-        # Placeholder (Estado vazio inicial da área de resultado)
         elif 'res' not in locals():
             st.info("👈 Configure o dossiê à esquerda e clique em GERAR para ver o resultado aqui.")
 
