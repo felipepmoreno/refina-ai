@@ -181,7 +181,7 @@ class VertexSynthesis:
             payload = PromptEngine.assemble_payload_vertex(artifact_type)
             response = model.generate_content(
                 payload, 
-                generation_config={"temperature": 0.2, "max_output_tokens": 8192}
+                generation_config={"temperature": 0.1, "max_output_tokens": 8192}
             )
             return response.text
         except Exception as e:
@@ -207,7 +207,7 @@ class CorporateSynthesis:
             payload = PromptEngine.assemble_payload_studio(artifact_type)
             response = model.generate_content(
                 payload,
-                generation_config={"temperature": 0.2, "max_output_tokens": 8192}
+                generation_config={"temperature": 0.1, "max_output_tokens": 8192}
             )
             return response.text
         except Exception as e:
@@ -242,7 +242,11 @@ def main():
         st.markdown("---")
         model_choice = st.selectbox(
             "Modelo de IA", 
-            ["gemini-1.5-flash-001", "gemini-1.5-pro-001"],
+            [
+                "gemini-2.5-flash-preview",
+                "gemini-2.5-flash",
+                "gemini-2.5-pro",
+            ],
             index=0,
             help="Flash é mais rápido. Pro é mais detalhado."
         )
