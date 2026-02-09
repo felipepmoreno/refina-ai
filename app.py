@@ -289,7 +289,7 @@ def main():
         st.markdown("---")
         model_choice = st.selectbox(
             "Modelo de IA", 
-            ["gemini-1.5-flash-001", "gemini-1.5-pro-001"],
+            ["gemini-2.5-flash", "gemini-2.5-pro"],
             index=0,
             help="Flash é mais rápido. Pro é mais detalhado."
         )
