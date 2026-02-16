@@ -1,6 +1,7 @@
 import streamlit as st
 from PIL import Image
 import io
+import json
 
 # ==============================================================================
 # IMPORTAÇÃO SEGURA DE BIBLIOTECAS (DUAL MODE)
@@ -22,32 +23,12 @@ except ImportError:
 # CONFIGURAÇÃO DA PÁGINA
 # ==============================================================================
 st.set_page_config(
-    page_title="Clarity Engine",
-    page_icon="🚀",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="Clarity Engine - Gerador de Artefatos",
+    page_icon="🎯",
+    layout="wide"
 )
 
-# Estilo CSS Personalizado
-st.markdown("""
-<style>
-    .stButton>button {
-        width: 100%;
-        border-radius: 5px;
-        font-weight: bold;
-    }
-    div[data-testid="stExpander"] div[role="button"] p {
-        font-size: 1rem;
-        font-weight: 600;
-    }
-    .uploadedFile {
-        border: 1px solid #e0e0e0;
-        border-radius: 5px;
-        padding: 10px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
+# Inicializa o Buffer na Sessão
 if 'dossie_buffer' not in st.session_state:
     st.session_state.dossie_buffer = [] 
 
@@ -57,134 +38,102 @@ if 'dossie_buffer' not in st.session_state:
 class ContextAccumulator:
     @staticmethod
     def add_image(uploaded_file):
-        if uploaded_file:
-            if any(item['label'] == uploaded_file.name for item in st.session_state.dossie_buffer):
-                st.warning(f"Imagem '{uploaded_file.name}' já adicionada.")
-                return
-
+        if uploaded_file is not None:
             image = Image.open(uploaded_file)
-            st.session_state.dossie_buffer.append({'type': 'image', 'content': image, 'label': uploaded_file.name})
-            st.toast(f"📸 Imagem '{uploaded_file.name}' adicionada!", icon="✅")
+            st.session_state.dossie_buffer.append({
+                'type': 'image',
+                'content': image,
+                'label': uploaded_file.name
+            })
+            st.toast(f"📸 Imagem '{uploaded_file.name}' adicionada!")
 
     @staticmethod
     def add_text(text_input):
         if text_input and text_input.strip():
-            label = f"Nota: {text_input[:20]}..." if len(text_input) > 20 else f"Nota: {text_input}"
-            st.session_state.dossie_buffer.append({'type': 'text', 'content': text_input, 'label': label})
-            st.toast("📝 Texto adicionado!", icon="✅")
+            st.session_state.dossie_buffer.append({
+                'type': 'text',
+                'content': text_input,
+                'label': f"Nota ({len(text_input)} chars)"
+            })
+            st.toast("📝 Texto adicionado!")
+
+    @staticmethod
+    def remove_item(index):
+        """Remove um item específico do buffer pelo índice."""
+        if 0 <= index < len(st.session_state.dossie_buffer):
+            removed = st.session_state.dossie_buffer.pop(index)
+            st.toast(f"Item removido: {removed['label']}")
 
     @staticmethod
     def clear_buffer():
         st.session_state.dossie_buffer = []
-        st.toast("🗑️ Dossiê limpo.", icon="🧹")
-
-    @staticmethod
-    def remove_item(index):
-        if 0 <= index < len(st.session_state.dossie_buffer):
-            removed = st.session_state.dossie_buffer.pop(index)
-            st.toast(f"Removido: {removed['label']}", icon="🗑️")
+        st.toast("🗑️ Dossiê limpo.")
 
 # ==============================================================================
-# CAMADA 2: ENGENHARIA DE PROMPT (PROFISSIONALIZADA)
+# CAMADA 2: ENGENHARIA DE PROMPT
 # ==============================================================================
 class PromptEngine:
     @staticmethod
     def get_system_instruction(artifact_type):
+        base_instruction = """
+        ATUE COMO: Product Owner Técnico e Engenheiro de Software Sênior.
+        CONTEXTO: Você receberá evidências visuais (telas, mockups, erros) e textuais.
+        OBJETIVO: Gerar um artefato de trabalho detalhado para o time de desenvolvimento ágil.
+        """
         
-        # PROMPT PARA PBI (Regra de Negócio + Funcionalidade)
         if artifact_type == "PBI (Product Backlog Item)":
-            return """
-            ATUE COMO: Product Owner Sênior e Especialista em Negócios.
-            OBJETIVO: Definir o "O QUE" e o "PORQUE" de uma funcionalidade, focando em valor de negócio e regras.
-            
-            SAÍDA ESPERADA (Markdown):
-            
-            # PBI: [Título Orientado a Valor]
-            **ID:** [Gerar ID] | **Prioridade:** [Alta/Média/Baixa]
-            
-            ## 1. User Story
-            **Como** [persona identificada], **Quero** [ação funcional], **Para que** [benefício claro de negócio].
-            
-            ## 2. Critérios de Aceite (Gherkin Obrigatório)
-            Escreva cenários de teste cobrindo: Caminho Feliz, Erros de Validação e Casos de Borda.
-            ```gherkin
-            Funcionalidade: [Nome]
-            
-            Cenário: [Nome do cenário]
-              Dado [contexto inicial]
-              Quando [ação]
-              Então [resultado esperado]
-            ```
-            
-            ## 3. Regras de Negócio
-            Liste regras explícitas (baseadas no texto) e implícitas (inferidas da UI, ex: campos obrigatórios, máscaras).
-            
-            ## 4. Definição de Pronto (DoD)
-            Critérios específicos para considerar este item concluído (ex: Documentação atualizada, Testes E2E).
+            return base_instruction + """
+            SAÍDA ESPERADA: Um PBI (User Story) completo contendo:
+            1. Título conciso (Valor de Negócio).
+            2. Descrição (Formato: Como [persona], quero [ação], para que [benefício]).
+            3. Critérios de Aceite (Lista numerada, cobrindo cenários felizes e de exceção).
+            4. Definição de Pronto (DoD) sugerida para este item específico.
+            5. Gherkin (Dado/Quando/Então) para os principais cenários de teste.
             """
-
-        # PROMPT PARA TASKS TÉCNICAS (Implementação)
         elif artifact_type == "Task Técnica (Sub-tarefa de PBI)":
-            return """
-            ATUE COMO: Tech Lead / Arquiteto de Software Sênior.
-            OBJETIVO: Definir o "COMO" implementar a funcionalidade, quebrando em passos técnicos para desenvolvedores.
-            
-            SAÍDA ESPERADA (Markdown):
-            
-            # TASK TÉCNICA: [Título Técnico - ex: Implementar Endpoint POST /api/v1/login]
-            **Contexto:** [Breve referência à funcionalidade de negócio]
-            
-            ## 1. Plano de Implementação
-            Detalhamento passo-a-passo do que deve ser codificado.
-            - [ ] [Passo 1 - ex: Criar migração de banco de dados]
-            - [ ] [Passo 2 - ex: Implementar Controller e Service]
-            - [ ] [Passo 3 - ex: Criar testes unitários]
-            
-            ## 2. Contrato de Interface (API/Dados)
-            Se houver API, defina o Swagger/OpenAPI spec sugerido (JSON).
-            Se for Frontend, defina a estrutura de props dos componentes.
-            
-            ## 3. Dependências e Impactos
-            - Bibliotecas necessárias.
-            - Alterações em outros serviços.
-            - Riscos de segurança (ex: Sanitização de inputs).
-            
-            ## 4. Critérios Técnicos de Aceite
-            - Cobertura de testes > 80%.
-            - Validação de Performance (ex: resposta < 200ms).
+            return base_instruction + """
+            SAÍDA ESPERADA: Uma Task Técnica para desenvolvedores contendo:
+            1. Objetivo Técnico (O que deve ser codificado/alterado).
+            2. Alterações Necessárias (Frontend, Backend, Banco de Dados, APIs).
+            3. Sugestão de endpoints, payloads JSON ou estruturas de dados.
+            4. Passos de Implementação recomendados.
             """
-
-        # PROMPT PARA BUGS (Correção)
         elif artifact_type == "Bug / Defeito":
-            return """
-            ATUE COMO: QA Engineer e Site Reliability Engineer (SRE).
-            OBJETIVO: Documentar um defeito com precisão para facilitar a reprodução e correção.
-            
-            SAÍDA ESPERADA (Markdown):
-            
-            # BUG: [Descrição concisa do erro]
-            **Severidade:** [Crítica/Alta/Média/Baixa] | **Ambiente:** [Inferir se possível]
-            
-            ## 1. Descrição do Problema
-            O que deveria acontecer vs. O que está acontecendo realmente. Use as evidências visuais para descrever o erro.
-            
-            ## 2. Passos para Reprodução (Steps to Reproduce)
-            Lista numerada clara e sequencial para replicar o erro.
-            1. Acessar tela X...
-            2. Clicar em Y...
-            
-            ## 3. Análise de Causa Raiz (Hipótese Técnica)
-            Baseado nas mensagens de erro (logs/telas), sugira onde está o problema (ex: Falha de conexão, Erro 500 no Backend, NullPointer no Frontend).
-            
-            ## 4. Sugestão de Correção
-            Se possível, sugira a correção técnica ou workaround.
+            return base_instruction + """
+            SAÍDA ESPERADA: Um Relatório de Bug profissional contendo:
+            1. Título do Defeito.
+            2. Passos para Reprodução (baseado na análise visual das evidências).
+            3. Comportamento Esperado vs. Comportamento Atual (Observado).
+            4. Hipótese da Causa Raiz (Análise técnica baseada no erro visual/log).
+            5. Severidade Sugerida e Impacto.
             """
-            
-        return "Instrução Padrão Genérica"
+        return base_instruction
 
     @staticmethod
-    def assemble_payload_vertex(artifact_type):
-        payload = [PromptEngine.get_system_instruction(artifact_type)]
+    def get_estimation_instruction():
+        return """
+        ATUE COMO: Arquiteto de Software e Agilista Sênior.
+        OBJETIVO: Analisar o artefato técnico fornecido abaixo e gerar uma estimativa de esforço e riscos.
+        REGRAS:
+        - O campo "fibonacci" deve ser um número inteiro pertencente à sequência de Fibonacci: 1, 2, 3, 5, 8 ou 13.
+        - O campo "moscow" deve ser uma das strings: "Must Have", "Should Have", "Could Have" ou "Won't Have".
+        - O campo "riscos" deve conter no mínimo 3 riscos técnicos potenciais.
+        - O campo "perfis" deve listar os perfis profissionais necessários para a implementação.
+        - O campo "justificativa" deve explicar a pontuação e os riscos de forma técnica.
+        FORMATO DE SAÍDA: Responda EXCLUSIVAMENTE com um JSON válido (sem markdown, sem blocos de código), com as seguintes chaves:
+        {
+            "fibonacci": int,
+            "moscow": "string",
+            "justificativa": "string",
+            "riscos": ["string", "string", "string"],
+            "perfis": ["string"]
+        }
+        """
+
+    @staticmethod
+    def assemble_payload_vertex(artifact_type, custom_instruction=None):
+        instruction = custom_instruction if custom_instruction else PromptEngine.get_system_instruction(artifact_type)
+        payload = [instruction]
         for item in st.session_state.dossie_buffer:
             if item['type'] == 'text':
                 payload.append(f"\nCONTEXTO ADICIONAL: {item['content']}\n")
@@ -195,210 +144,279 @@ class PromptEngine:
         return payload
 
     @staticmethod
-    def assemble_payload_studio(artifact_type):
-        payload = [PromptEngine.get_system_instruction(artifact_type)]
+    def assemble_payload_studio(artifact_type, custom_instruction=None):
+        instruction = custom_instruction if custom_instruction else PromptEngine.get_system_instruction(artifact_type)
+        payload = [instruction]
         for item in st.session_state.dossie_buffer:
             if item['type'] == 'text':
                 payload.append(f"\nCONTEXTO ADICIONAL: {item['content']}\n")
             elif item['type'] == 'image':
-                payload.append(item['content'])
+                payload.append(item['content']) 
         return payload
 
 # ==============================================================================
 # CAMADA 3: SÍNTESE (Dual Mode)
 # ==============================================================================
+
 class VertexSynthesis:
     def __init__(self, project_id, location):
+        self.project_id = project_id
+        self.location = location 
+        
         if VERTEX_LIB_AVAILABLE:
             try:
                 vertexai.init(project=project_id, location=location)
                 self.initialized = True
             except Exception as e:
-                st.error(f"Erro Vertex AI: {e}")
+                st.error(f"Erro ao iniciar Vertex AI: {e}")
                 self.initialized = False
         else:
-            st.error("Lib `google-cloud-aiplatform` ausente.")
+            st.error("Biblioteca `google-cloud-aiplatform` não instalada.")
             self.initialized = False
 
-    def generate(self, artifact_type, model_name):
-        if not self.initialized: return "Erro de Inicialização."
+    def generate(self, artifact_type, model_name, custom_instruction=None):
+        if not self.initialized: return "Erro: Vertex AI não inicializado."
         try:
             model = VertexModel(model_name)
-            payload = PromptEngine.assemble_payload_vertex(artifact_type)
+            payload = PromptEngine.assemble_payload_vertex(artifact_type, custom_instruction)
+            
             response = model.generate_content(
                 payload, 
                 generation_config={"temperature": 0.2, "max_output_tokens": 8192}
             )
             return response.text
         except Exception as e:
-            return f"❌ Erro Vertex: {str(e)}"
+            error_msg = str(e)
+            
+            st.error("⚠️ Falha na Vertex AI. Detalhes técnicos abaixo:")
+            with st.expander("Ver Log de Erro Completo (Para Debug)"):
+                st.code(error_msg)
+
+            if "404" in error_msg and "not found" in error_msg:
+                return f"""
+                ❌ **Modelo ou Região Inválida**
+                O modelo `{model_name}` não foi encontrado na região `{self.location}`.
+                """
+            
+            if "BILLING_DISABLED" in error_msg:
+                return "❌ Erro de Faturamento: Ative o Billing no Console do Google Cloud."
+            
+            return f"❌ Erro Genérico: {error_msg}"
 
 class CorporateSynthesis:
-    def __init__(self, api_key):
+    def __init__(self, api_key, base_url=None):
+        self.api_key = api_key
+        self.base_url = base_url
         if STUDIO_LIB_AVAILABLE:
             genai.configure(api_key=api_key)
             self.initialized = True
         else:
-            st.error("Lib `google-generativeai` ausente.")
+            st.error("Biblioteca `google-generativeai` não instalada.")
             self.initialized = False
 
-    def generate(self, artifact_type, model_name):
-        if not self.initialized: return "Erro de Inicialização."
+    def generate(self, artifact_type, model_name, custom_instruction=None):
+        if not self.initialized: return "Erro de Lib."
+        if not self.api_key: return "Erro: API Key vazia."
         try:
-            clean_model = model_name
-            if "gemini-1.5-flash" in model_name: clean_model = "gemini-1.5-flash"
-            elif "gemini-1.5-pro" in model_name: clean_model = "gemini-1.5-pro"
-            elif "gemini-2.0" in model_name: clean_model = "gemini-1.5-pro" # Fallback seguro se não existir no Studio
-            
-            model = genai.GenerativeModel(clean_model)
-            payload = PromptEngine.assemble_payload_studio(artifact_type)
+            model = genai.GenerativeModel(model_name)
+            payload = PromptEngine.assemble_payload_studio(artifact_type, custom_instruction)
             response = model.generate_content(
                 payload,
                 generation_config={"temperature": 0.2, "max_output_tokens": 8192}
             )
             return response.text
         except Exception as e:
-            return f"❌ Erro API Key: {str(e)}"
+            return f"❌ Erro AI Studio: {str(e)}"
 
 # ==============================================================================
-# INTERFACE (UX OTIMIZADA)
+# CAMADA 4: SMART ESTIMATOR & RISK ANALYZER
+# ==============================================================================
+def render_estimation_panel(data_json):
+    """Parseia o JSON da estimativa e renderiza o painel de análise."""
+    try:
+        # Remove possíveis blocos de código markdown que a LLM pode adicionar
+        cleaned = data_json.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+
+        data = json.loads(cleaned)
+
+        st.divider()
+        st.subheader("📊 Análise de Viabilidade & Estimativa")
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Story Points (Fibonacci)", f"🔥 {data['fibonacci']}")
+        c2.metric("Prioridade MoSCoW", data['moscow'])
+        with c3:
+            st.write("**Perfis Necessários:**")
+            for perfil in data.get('perfis', []):
+                st.caption(f"👤 {perfil}")
+
+        with st.expander("🔍 Justificativa e Riscos", expanded=True):
+            st.markdown(f"**Por que essa pontuação?** {data.get('justificativa', 'N/A')}")
+            st.markdown("**Riscos Identificados:**")
+            for risco in data.get('riscos', []):
+                st.warning(risco)
+
+    except (json.JSONDecodeError, KeyError, TypeError):
+        st.error("Não foi possível processar a estimativa automática.")
+
+# ==============================================================================
+# INTERFACE DO USUÁRIO
 # ==============================================================================
 def main():
-    # --- Sidebar: Configurações Técnicas ---
     with st.sidebar:
         st.title("⚙️ Configuração")
-        st.markdown("---")
         
         env_mode = st.radio(
-            "Ambiente de Conexão", 
-            ["Acadêmico (Vertex AI)", "Corporativo (API Key)"],
-            help="Escolha como se conectar à IA."
+            "Ambiente de Execução",
+            ["Projeto Acadêmico (GCP Vertex AI)", "Integração Corporativa (API Key)"],
         )
         
+        st.divider()
         auth_config = {}
-        if env_mode == "Acadêmico (Vertex AI)":
-            st.info("ℹ️ Autenticação via CLI (`gcloud auth`)")
-            auth_config['project_id'] = st.text_input("Project ID (GCP)", placeholder="ex: clarity-engine-123")
-            auth_config['location'] = "us-central1" 
+        
+        if env_mode == "Projeto Acadêmico (GCP Vertex AI)":
+            st.info("Autenticação: `gcloud auth`")
+            auth_config['project_id'] = st.text_input("GCP Project ID", placeholder="ex: clarity-engine")
+            
+            auth_config['location'] = st.selectbox(
+                "Região (Vertex AI)",
+                ["us-central1", "global"],
+                index=0,
+                help="Use 'us-central1' para modelos estáveis. Tente 'global' se os modelos Preview (Gemini 3) falharem."
+            )
             auth_config['mode'] = 'vertex'
+            
         else:
-            st.info("ℹ️ Autenticação via Chave")
+            st.info("Autenticação: API Key")
             auth_config['api_key'] = st.text_input("API Key", type="password")
+            auth_config['base_url'] = st.text_input("Base URL (Opcional)")
             auth_config['mode'] = 'corporate'
 
-        st.markdown("---")
+        st.divider()
+        
         model_choice = st.selectbox(
-            "Modelo de IA", 
-            ["gemini-2.5-flash", "gemini-2.5-pro"],
-            index=0,
-            help="Flash é mais rápido. Pro é mais detalhado."
+            "Modelo Gemini", 
+            [
+                "gemini-2.5-pro",    
+                "gemini-2.5-flash"       
+            ],
+            index=0
         )
-        st.caption("v5.0 - Professional Prompts")
 
-    # --- Área Principal ---
-    st.title("🚀 Clarity Engine")
-    st.markdown("##### Assistente de Refinamento de Requisitos")
+    st.title("🎯 Clarity Engine")
+    st.caption(f"Ambiente: **{env_mode}** | Região: **{auth_config.get('location', 'Global/Auto')}**")
 
-    col1, col2 = st.columns([0.4, 0.6], gap="large")
+    col_left, col_right = st.columns([1, 1])
 
-    with col1:
-        st.success("📂 **1. Adicionar Evidências**")
-        
-        tab_img, tab_txt = st.tabs(["🖼️ Imagem", "📝 Texto/Regra"])
-        
+    with col_left:
+        st.subheader("1. Acumulador")
+        tab_img, tab_txt = st.tabs(["📸 Imagem", "📝 Texto"])
         with tab_img:
-            img = st.file_uploader("Arraste prints ou mockups", type=['png', 'jpg'], key="u_img", label_visibility="collapsed")
-            if img:
-                if st.button("➕ Adicionar Imagem ao Dossiê", type="secondary"):
-                    ContextAccumulator.add_image(img)
-        
+            u_img = st.file_uploader("Upload", type=['png', 'jpg', 'jpeg'])
+            if u_img and st.button("➕ Add Imagem"): ContextAccumulator.add_image(u_img)
         with tab_txt:
-            txt = st.text_area("Descreva regras ou cole logs", height=100, placeholder="Ex: O botão de login deve validar o email...", label_visibility="collapsed")
-            col_b1, col_b2 = st.columns([3,1])
-            with col_b2:
-                if st.button("➕ Add", type="secondary"):
-                    ContextAccumulator.add_text(txt)
+            u_txt = st.text_area("Texto/Log", height=100)
+            if st.button("➕ Add Texto"): ContextAccumulator.add_text(u_txt)
 
-        st.markdown("---")
-        
-        st.markdown(f"**🗂️ Dossiê de Contexto ({len(st.session_state.dossie_buffer)} itens)**")
-        
-        if not st.session_state.dossie_buffer:
-            st.info("O dossiê está vazio. Adicione evidências acima.")
-        else:
-            for i, item in enumerate(st.session_state.dossie_buffer):
-                icon = "🖼️" if item['type'] == 'image' else "📝"
-                col_item_label, col_item_btn = st.columns([0.85, 0.15])
-                with col_item_label:
-                    st.text(f"{icon} {item['label']}")
-                with col_item_btn:
-                    if st.button("❌", key=f"del_{i}", help="Remover item"):
-                        ContextAccumulator.remove_item(i)
-                        st.rerun()
+        # ----------------------------------------------------------------------
+        # VISUALIZADOR DE ITENS COM REMOÇÃO INDIVIDUAL
+        # ----------------------------------------------------------------------
+        if st.session_state.dossie_buffer:
+            st.divider()
+            st.markdown(f"**Dossiê Atual ({len(st.session_state.dossie_buffer)} itens)**")
             
-            if st.button("🗑️ Limpar Dossiê Completo", type="primary"):
+            # Loop com índice para permitir remoção
+            for i, item in enumerate(st.session_state.dossie_buffer):
+                # Cria colunas para organizar o conteúdo e o botão de exclusão
+                c1, c2 = st.columns([0.85, 0.15])
+                
+                with c1:
+                    # Expander para ver detalhes sem ocupar muito espaço
+                    icon = "🖼️" if item['type'] == 'image' else "📝"
+                    with st.expander(f"{icon} {item['label']}", expanded=False):
+                        if item['type'] == 'image':
+                            st.image(item['content'])
+                        else:
+                            st.code(item['content'])
+                
+                with c2:
+                    # Botão de remoção com chave única
+                    if st.button("❌", key=f"del_{i}", help="Remover este item"):
+                        ContextAccumulator.remove_item(i)
+                        st.rerun() # Recarrega a tela para atualizar a lista
+            
+            # Botão para limpar tudo continua existindo como opção rápida
+            if st.button("🗑️ Limpar Dossiê Completo", type="secondary", use_container_width=True): 
                 ContextAccumulator.clear_buffer()
                 st.rerun()
 
-    with col2:
-        st.warning("⚡ **2. Gerar Especificação**")
+    with col_right:
+        st.subheader("2. Gerar")
+        artifact_type = st.radio("Tipo", ["PBI", "Task Técnica", "Bug / Defeito"])
         
-        # Configuração da Geração com NOVAS CATEGIORIAS
-        c_art, c_btn = st.columns([3, 1])
-        with c_art:
-            art_type = st.radio(
-                "Tipo de Artefato", 
-                ["PBI (Product Backlog Item)", "Task Técnica (Sub-tarefa de PBI)", "Bug / Defeito"], 
-                horizontal=True,
-                label_visibility="collapsed"
-            )
-        with c_btn:
-            btn_process = st.button("✨ GERAR", type="primary", use_container_width=True)
-
-        st.markdown("---")
-
-        if btn_process:
+        if st.button("🚀 Processar", type="primary", use_container_width=True):
             if not st.session_state.dossie_buffer:
-                st.error("⚠️ Adicione evidências ao dossiê na coluna da esquerda primeiro.")
+                st.warning("Adicione evidências primeiro.")
             else:
-                with st.spinner(f"🤖 Analisando contexto para gerar {art_type}..."):
+                with st.spinner("Gerando Artefato e Estimativas..."):
+                    result = None
+                    bot = None
+
+                    # --- Instancia o bot conforme o modo ---
                     if auth_config['mode'] == 'vertex':
                         if not auth_config['project_id']:
-                            st.error("Configure o Project ID na barra lateral.")
-                            res = None
+                            st.error("Falta o Project ID.")
                         else:
                             bot = VertexSynthesis(auth_config['project_id'], auth_config['location'])
-                            res = bot.generate(art_type, model_choice)
                     else:
                         if not auth_config['api_key']:
-                            st.error("Configure a API Key na barra lateral.")
-                            res = None
+                            st.error("Falta a API Key.")
                         else:
-                            bot = CorporateSynthesis(auth_config['api_key'])
-                            res = bot.generate(art_type, model_choice)
-                    
-                    if res and "❌" not in res:
-                        st.balloons()
-                        st.success("Documento gerado com sucesso!")
-                        
-                        tab_view, tab_raw = st.tabs(["📄 Visualização", "code Markdown"])
-                        with tab_view:
-                            st.markdown(res)
-                        with tab_raw:
-                            st.code(res, language='markdown')
-                        
-                        st.download_button(
-                            label="📥 Baixar Arquivo .md",
-                            data=res,
-                            file_name=f"{art_type.replace(' ', '_')}_Specification.md",
-                            mime="text/markdown",
-                            type="primary"
-                        )
-                    elif res:
-                        st.error(res)
+                            bot = CorporateSynthesis(auth_config['api_key'], auth_config.get('base_url'))
 
-        elif 'res' not in locals():
-            st.info("👈 Configure o dossiê à esquerda e clique em GERAR para ver o resultado aqui.")
+                    # --- 1ª Chamada: Geração do Artefato Principal ---
+                    if bot:
+                        result = bot.generate(artifact_type, model_choice)
+
+                    if result and not result.startswith("❌") and not result.startswith("Erro"):
+                        st.success("Artefato gerado com sucesso!")
+                        st.markdown(result)
+                        st.download_button("Download .md", result, file_name="doc.md")
+
+                        # --- Ponto Crítico: Adiciona artefato ao contexto ---
+                        st.session_state.dossie_buffer.append({
+                            'type': 'text',
+                            'content': f"Artefato Gerado: {result}",
+                            'label': 'Artefato Gerado (Auto)'
+                        })
+
+                        # --- 2ª Chamada: Smart Estimator ---
+                        with st.spinner("Analisando estimativa de esforço e riscos..."):
+                            estimation_instruction = PromptEngine.get_estimation_instruction()
+                            estimation_result = bot.generate(
+                                artifact_type, model_choice,
+                                custom_instruction=estimation_instruction
+                            )
+
+                        # Remove o artefato temporário do buffer para não poluir
+                        st.session_state.dossie_buffer = [
+                            item for item in st.session_state.dossie_buffer
+                            if item.get('label') != 'Artefato Gerado (Auto)'
+                        ]
+
+                        # --- Renderiza o Painel de Estimativa ---
+                        if estimation_result and not estimation_result.startswith("❌") and not estimation_result.startswith("Erro"):
+                            render_estimation_panel(estimation_result)
+                        else:
+                            st.error("Não foi possível processar a estimativa automática.")
+
+                    elif result:
+                        if "❌" not in result: st.error(result)
 
 if __name__ == "__main__":
     main()
